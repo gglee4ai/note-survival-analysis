@@ -1,0 +1,260 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# package install and test
+# install.packages("autoReg")
+# install.packages("survival")
+# install.packages("survminer")
+# remotes::install_github("cardiomoon/howto")
+# install.packages("flextable")
+# install.packages("ftExtra")
+```
+
+```{r}
+library("autoReg")
+library("survival")
+library("survminer")
+library("howto")
+library("flextable")
+library("ftExtra")
+library(tidyverse)
+```
+
+# 1 KM 생존곡선
+
+```{r}
+data(anderson, package = "autoReg")
+anderson
+```
+
+```{r}
+anderson |> count(status)
+anderson |> count(sex)
+anderson |> count(rx)
+```
+
+```{r}
+data <- subset(anderson, rx == 0)
+data
+```
+
+```{r}
+s <- with(data, Surv(time, status))
+str(s)
+```
+
+```{r}
+anderson |>
+  group_by(rx) |>
+  summarize(T = mean(time), h = sum(status) / sum(time))
+```
+
+```{r}
+fit <- survfit(Surv(time, status) ~ 1, data = data)
+fit
+```
+
+```{r}
+summary(fit)
+```
+
+```{r}
+library(howto)
+try(howto(fit))
+```
+
+```{r}
+plot(fit)
+median <- fit$time[min(which(fit$surv < 0.5))]
+arrows(0, 0.5, median, 0.5, angle = 15, col = "red")
+arrows(median, 0.5, median, 0, angle = 15, col = "red")
+text(median, 0, median, pos = 1, offset = 0.1)
+```
+
+```{r}
+survminer::ggsurvplot(fit, data = data)
+```
+
+# 2 로그순위검정
+
+## 2-1 두 군 간의 KM 생존곡선 비교
+
+```{r}
+fit1 <- survfit(Surv(time, status) ~ rx, data = anderson1)
+summary(fit1)
+```
+
+```{r}
+survminer::ggsurvplot(fit1, data = anderson1, pval = TRUE)
+```
+
+```{r}
+sd1 <- survdiff(Surv(time, status) ~ rx, data = anderson1)
+sd1
+```
+
+```{r}
+sd1$chisq
+pchisq(sd1$chisq, df = 1, lower.tail = FALSE)
+```
+
+## 2-2 세 군 이상인 경우의 로그순위검정
+
+```{r}
+data(colon, package = "survival")
+colon
+```
+
+```{r}
+colon |> count(rx)
+colon |> count(status)
+```
+
+```{r}
+survdiff(Surv(time, status) ~ rx, data = colon)
+```
+
+```{r}
+fit2 <- survfit(Surv(time, status) ~ rx, data = colon)
+ggsurvplot(fit2, data = colon, pval = TRUE)
+```
+
+```{r}
+survdiff(Surv(time, status) ~ rx, data = colon |> filter(rx != "Lev+5FU"))
+```
+
+## 2-3 로그순위검정의 대안
+
+```{r}
+data(pancreatic2, package = "asaur")
+pancreatic2
+```
+
+```{r}
+pancreatic2 |> count(stage)
+```
+
+```{r}
+survdiff(Surv(pfs) ~ stage, data = pancreatic2)
+```
+
+```{r}
+survdiff(Surv(pfs) ~ stage, data = pancreatic2, rho = 1) # Peto method
+```
+
+초기 생존시간에 가중치를 주기 때문에 국소진행함이 초기 생존에 유리한 것으로 보인다.
+
+```{r}
+fit4 <- survfit(Surv(pfs) ~ stage, data = pancreatic2)
+ggsurvplot(fit4, data = pancreatic2, pval = TRUE)
+```
+
+```{r}
+# Peto method
+ggsurvplot(fit4, data = pancreatic2, pval = TRUE, log.rank.weights = "S1")
+```
+
+## 2-5 층화된 로그순위검정
+
+```{r}
+data(pharmacoSmoking, package = "asaur")
+pharmacoSmoking
+```
+
+```{r}
+survdiff(Surv(ttr, relapse) ~ grp, data = pharmacoSmoking)
+```
+
+```{r}
+fit5 <- survfit(Surv(ttr, relapse) ~ grp, data = pharmacoSmoking)
+ggsurvplot(fit5, data = pharmacoSmoking, pval = TRUE, legend = c(0.7, 0.85))
+```
+
+```{r}
+fit6 <- survfit(Surv(ttr, relapse) ~ grp + strata(ageGroup2), data = pharmacoSmoking)
+fit6
+```
+
+```{r}
+survdiff(Surv(ttr, relapse) ~ grp + strata(ageGroup2), data = pharmacoSmoking)
+```
+
+```{r}
+labs <- c("Combination, age 21-49", "Combination, age 50+", "patchOnly, age 21-49", "patchOnly, age = 50+")
+survminer::ggsurvplot(fit6,
+  data = pharmacoSmoking,
+  pval = TRUE,
+  legend = c(0.7, 0.85),
+  legend.labs = labs
+)
+```
+
+```{r}
+lambda.mutant.0 <- 0.03
+lambda.mutant.1 <- 0.03 * 0.55
+lambda.wt.0 <- 0.03 * 0.2
+lambda.wt.1 <- 0.03 * 0.2 * 0.55
+
+set.seed(4321)
+tt.control.mutant <- rexp(25, rate = lambda.mutant.0)
+tt.treat.mutant <- rexp(125, rate = lambda.mutant.1)
+tt.control.wt <- rexp(125, rate = lambda.wt.0)
+tt.treat.wt <- rexp(25, rate = lambda.wt.1)
+ttAll <- c(
+  tt.control.mutant,
+  tt.treat.mutant,
+  tt.control.wt,
+  tt.treat.wt
+)
+ttAll
+```
+
+```{r}
+status <- rep(1, length(ttAll))
+genotype <- c(rep("mutant", 150), rep("wt", 150))
+trt <- c(rep(0, 25), rep(1, 125), rep(0, 125), rep(1, 25))
+
+geneConfounder <- data.frame(ttAll, status, trt, genotype)
+geneConfounder
+```
+
+```{r}
+geneConfounder |>
+  count(trt, genotype)
+```
+
+```{r}
+survdiff(Surv(ttAll, status) ~ trt, data = geneConfounder)
+```
+
+```{r}
+fit <- survfit(Surv(ttAll, status) ~ trt, data = geneConfounder)
+labs <- c("Control", "Treated")
+ggsurvplot(fit,
+  data = geneConfounder,
+  legend = c(0.7, 0.9), legend.title = "",
+  legend.labs = labs,
+  pval = TRUE
+)
+```
+
+```{r}
+survdiff(Surv(ttAll, status) ~ trt + strata(genotype), data = geneConfounder)
+```
+
+```{r}
+fit <- survfit(Surv(ttAll, status) ~ trt + strata(genotype), data = geneConfounder)
+labs <- c(
+  "Control Mutant", "Control Wildtype",
+  "Treated Mutant", "Treated Wildtype"
+)
+ggsurvplot(fit,
+  data = geneConfounder,
+  legend = c(0.75, 0.85),
+  legend.labs = labs,
+  pval = TRUE
+)
+```
