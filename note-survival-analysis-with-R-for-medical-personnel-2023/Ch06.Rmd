@@ -1,0 +1,86 @@
+---
+title: "Chapter 6"
+output: html_notebook
+---
+
+```{r}
+library(survival)
+library(autoReg)
+fit <- coxph(Surv(time, status) ~ logWBC + rx + sex, data = anderson)
+fit
+```
+
+```{r}
+gaze(fit)
+```
+
+# 1 비례위험 가정 검정
+
+```{r}
+cox.zph(fit)
+```
+
+```{r}
+coxzphplot(cox.zph(fit), var = "sex")
+```
+
+# 2 층화된 콕스모형
+
+```{r}
+fit1 <- coxph(Surv(time, status) ~ logWBC + rx + strata(sex), data = anderson)
+summary(fit1)
+```
+
+```{r}
+pnorm(-(abs(-2.107685))) * 2
+```
+
+```{r}
+pchisq((-2.107685)^2, df = 1, lower.tail = FALSE)
+```
+
+```{r}
+fit0 <- coxph(Surv(time, status) ~ strata(sex), data = anderson)
+fit0
+```
+
+```{r}
+fit1$loglik
+```
+
+```{r}
+pchisq(32.06, df = 2, lower.tail = FALSE)
+```
+
+# 3 층화된 콕스모형의 위험함수
+
+```{r}
+adjustedPlot(fit1, xnames = c("sex"))
+```
+
+```{r}
+adjustedPlot(fit1, xnames = c("sex", "rx"), facet = "sex")
+```
+
+# 4 상호작용이 있는 층화된 콕스모형
+
+```{r}
+fit2 <- coxph(Surv(time, status) ~ rx + logWBC + rx:sex + logWBC:sex + strata(sex),
+  data = anderson
+)
+fit2
+```
+
+```{r}
+LR <- -2 * (fit1$loglik[2] - fit2$loglik[2])
+LR
+```
+
+```{r}
+pchisq(LR, df = 2, lower.tail = FALSE)
+```
+
+```{r}
+AIC(fit1)
+AIC(fit2)
+```
