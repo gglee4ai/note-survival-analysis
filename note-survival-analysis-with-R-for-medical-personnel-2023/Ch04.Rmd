@@ -1,0 +1,242 @@
+---
+title: "Chapter 4"
+output: html_notebook
+---
+
+# 1 콕스PH모형에 적합시킨 여러 모형의 비교
+
+```{r}
+library(autoReg)
+library(survival)
+library(survminer)
+library(flextable)
+library(ftExtra)
+library(interpretCI)
+library(tidyverse)
+```
+
+```{r}
+data(anderson)
+anderson
+```
+
+```{r}
+fit0 <- coxph(Surv(time, status) ~ 1, data = anderson)
+fit1 <- coxph(Surv(time, status) ~ rx, data = anderson)
+fit2 <- coxph(Surv(time, status) ~ rx + logWBC, data = anderson)
+fit3 <- coxph(Surv(time, status) ~ rx * logWBC, data = anderson)
+```
+
+```{r}
+summary(fit1)
+gaze(fit1)
+```
+
+```{r}
+summary(fit2)
+gaze(fit2)
+```
+
+```{r}
+summary(fit3)
+gaze(fit3)
+```
+
+```{r}
+gaze(fit3) |>
+  myft() |>
+  highlight(i = 1, part = "footer")
+```
+
+```{r}
+-2 * fit0$loglik - (-2 * fit3$loglik[2])
+```
+
+```{r}
+2 * diff(fit3$loglik)
+```
+
+```{r}
+pchisq(2 * diff(fit3$loglik), df = 3, lower.tail = FALSE)
+```
+
+```{r}
+summary(fit3)
+```
+
+```{r}
+dll <- -2 * (fit2$loglik[2] - fit3$loglik[2])
+dll
+```
+
+```{r}
+pchisq(dll, df = 1, lower.tail = FALSE)
+```
+
+```{r}
+AIC(fit0)
+AIC(fit1)
+AIC(fit2)
+AIC(fit3)
+```
+
+```{r}
+modelPlot(fit1, widths = c(1, 0, 2.1, 3))
+modelPlot(fit2, widths = c(1, 0, 2.1, 3))
+modelPlot(fit3, widths = c(1, 0, 2.1, 3))
+```
+
+```{r}
+adjustedPlot(fit1, xnames = "rx")
+```
+
+```{r}
+adjustedPlot(fit2, xnames = "rx")
+```
+
+```{r}
+adjustedPlot(fit3, xnames = "rx")
+```
+
+# 4 콕스PH모형에서 회귀계수의 추정
+
+```{r}
+fit2
+gaze(fit2)
+```
+
+# 6 콕스PH모형을 이용한 보정된 생존곡선
+
+```{r}
+fit <- survfit(Surv(time, status) ~ rx, data = anderson)
+plot(fit)
+```
+
+```{r}
+fit2 <- coxph(Surv(time, status) ~ rx + logWBC, data = anderson)
+rx <- c(0, 1)
+logWBC <- median(anderson$logWBC)
+newdata <- data.frame(rx, logWBC)
+plot(survfit(fit2, newdata = newdata), col = 1:2, lty = 1:2)
+legend("topright", legend = c("treated", "control"), col = 1:2, lty = 1:2)
+```
+
+```{r}
+adjustedPlot(fit2, xnames = "rx")
+```
+
+```{r}
+data(cancer, package = "survival")
+fit <- coxph(Surv(time, status) ~ rx + strata(sex) + age + differ, data = colon)
+fit
+```
+
+```{r}
+adjustedPlot(fit, xnames = c("rx", "sex", "differ"), facet = c("sex", "rx"))
+```
+
+# 7 콕스가능도
+
+```{r}
+pl <- function(beta) {
+  psi <- exp(beta)
+  result <- log(psi) - log(2 * psi + 2) - log(psi + 2)
+  result
+}
+
+beta <- seq(-2, 2, length.out = 101)
+plot(pl(beta) ~ beta,
+  type = "l",
+  xlab = "beta",
+  ylab = "log partial likelihood",
+  cex.axis = 1.5, cex.lab = 1.5, lwd = 2, col = "black"
+)
+```
+
+```{r}
+scoref <- function(beta) {
+  psi <- exp(beta)
+  result <- 1 - 2 * psi / (2 * psi + 2) - psi / (psi + 2)
+  result
+}
+
+plot(scoref(beta) ~ beta,
+  type = "l",
+  xlab = "beta",
+  ylab = "score function",
+  cex.axis = 1.5,
+  cex.lab = 1.5,
+  lwd = 2,
+  col = "black"
+)
+```
+
+```{r}
+result <- optim(
+  par = 0, fn = pl, method = "L-BFGS-B",
+  control = list(fnscale = -1), lower = -3, upper = 1
+)
+result
+```
+
+```{r}
+result1 <- uniroot(f = scoref, interval = c(-5, 5), tol = .Machine$double.eps)
+result1$root
+```
+
+```{r}
+smoke <- data.frame(
+  id = c("yh", "cs", "ys", "gs"),
+  time = c(2, 3, 5, 8),
+  status = c(1, 1, 0, 1),
+  smoke = c(1, 0, 0, 1)
+)
+smoke
+```
+
+```{r}
+fit.cox <- coxph(Surv(time, status) ~ smoke, data = smoke)
+fit.cox$coef
+```
+
+```{r}
+scoref(0)
+```
+
+```{r}
+fit <- survfit(Surv(time, status) ~ smoke, data = smoke)
+summary(fit)
+```
+
+```{r}
+add_tangent <- function(x, col = "black") {
+  (y <- pl(x))
+  points(x, y, col = col, pch = 19)
+  (slope <- scoref(x))
+  intercept <- y - slope * x
+  abline(a = intercept, b = slope, col = col)
+}
+
+plot(pl(beta) ~ beta, type = "l")
+abline(v = result1$root, lty = 2)
+abline(v = 0, lty = 2, col = "red")
+add_tangent(0, col = "red")
+add_tangent(result1$root)
+```
+
+# 8 여러 개의 공변량이 있을 때 콕스부분가능도
+
+```{r}
+fit2 <- coxph(Surv(time, status) ~ rx + logWBC, data = anderson)
+summary(fit2)
+```
+
+```{r}
+fit0 <- coxph(Surv(time, status) ~ rx, data = anderson)
+summary(fit0)
+```
+
+```{r}
+AIC(fit2)
+AIC(fit0)
+```

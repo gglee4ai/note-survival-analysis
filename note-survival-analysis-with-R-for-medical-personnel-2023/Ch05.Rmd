@@ -1,0 +1,193 @@
+---
+title: "Chapter 5"
+output: html_notebook
+---
+
+# 1 그래프를 이용하는 방법
+
+```{r}
+library(survival)
+library(autoReg)
+fit <- survfit(Surv(time, status) ~ rx, data = anderson)
+plot(fit)
+autoReg::loglogplot(fit)
+```
+
+```{r}
+fit1 <- survfit(Surv(time, status) ~ sex, data = anderson)
+plot(fit1)
+loglogplot(fit1)
+```
+
+```{r}
+fit2 <- survfit(Surv(time, status) ~ logWBC, data = anderson)
+plot(fit2) # logWBC가 연속함수이므로 제대로 그려지지 않는다
+loglogplot(fit2)
+```
+
+```{r}
+loglogplot(fit2, no = 2)
+```
+
+```{r}
+fit4 <- survfit(Surv(time, status) ~ rx + logWBC, data = anderson)
+loglogplot(fit4, no = 2)
+```
+
+```{r}
+fit5 <- coxph(Surv(time, status) ~ rx, data = anderson)
+OEplot(fit5)
+```
+
+```{r}
+fit6 <- coxph(Surv(time, status) ~ logWBC, data = anderson)
+OEplot(fit6)
+```
+
+```{r}
+fit6 <- coxph(Surv(time, status) ~ sex, data = anderson)
+OEplot(fit6)
+```
+
+# 2 잔차를 이용한 적합도 평가
+
+```{r}
+fit0 <- coxph(Surv(time, status == 2) ~ 1, data = pbc) # status==2 일때를 event 발생으로 취급
+fit0
+```
+
+```{r}
+r1 <- residuals(fit0, type = "martingale")
+plot(pbc$age, r1, xlab = "age", ylab = "martingale residual")
+lines(lowess(pbc$age, r1))
+```
+
+```{r}
+plot(pbc$bili, r1, xlab = "bilirubin", ylab = "martinegale residual")
+lines(lowess(pbc$bili, r1))
+plot(log(pbc$bili), r1, xlab = "log(bilirubin)", ylab = "martinegale residual")
+lines(lowess(log(pbc$bili), r1))
+```
+
+```{r}
+fit <- coxph(Surv(time, status == 2) ~ age + bili, data = pbc)
+residualNull(fit)
+```
+
+```{r}
+data(pharmacoSmoking, package = "asaur")
+pharmacoSmoking$priorAttempts |> table()
+```
+
+```{r}
+pharmacoSmoking$priorAttempts[pharmacoSmoking$priorAttempts > 20] <- 20
+fit <- coxph(Surv(ttr, relapse) ~ age + priorAttempts + longestNoSmoke, data = pharmacoSmoking)
+residualNull(fit)
+```
+
+```{r}
+fit1 <- coxph(
+  Surv(ttr, relapse) ~ grp + gender + race + employment + yearsSmoking +
+    levelSmoking + age + priorAttempts + log(I(longestNoSmoke + 1)),
+  data = pharmacoSmoking
+)
+final <- step(fit1, trace = 0)
+final
+```
+
+```{r}
+residualPlot(final)
+```
+
+```{r}
+residualPlot(final, type = "dfbeta")
+```
+
+```{r}
+residualPlot(final, type = "dfbeta", vars = "employmentpt", topn = 10)
+residualPlot(final, type = "dfbetas", vars = "employmentpt", topn = 10)
+```
+
+# 3 적합도 검정
+
+```{r}
+fit <- coxph(Surv(time, status) ~ rx + sex + logWBC, data = anderson)
+x <- cox.zph(fit)
+x
+```
+
+```{r}
+coxzphplot(x, add.lm = TRUE)
+```
+
+```{r}
+coxzphplot(x, var = "sex", add.lm = TRUE)
+```
+
+```{r}
+data(pancreatic2, package = "asaur")
+fit <- coxph(Surv(pfs) ~ stage, data = pancreatic2)
+gaze(fit)
+```
+
+```{r}
+pancreatic2$stage |> table()
+```
+
+```{r}
+x <- cox.zph(fit)
+coxzphplot(x, add.lm = TRUE)
+```
+
+```{r}
+cox.zph(fit)
+cox.zph(fit, transform = "km")
+```
+
+```{r}
+cox.zph(fit, transform = "rank")
+```
+
+```{r}
+cox.zph(fit, transform = "identity")
+```
+
+```{r}
+coxzphplot(cox.zph(fit, transform = "identity"), add.lm = TRUE)
+```
+
+이벤트 발생이 시간에 따라 균등하게 분포되어 있지 않은 경우, 이러한 변환은 추천하지 않는다.
+
+```{r}
+time <- c(6, 7, 10, 15, 19, 25)
+status <- c(1, 0, 1, 1, 0, 1)
+trt <- c(0, 0, 1, 0, 1, 1) # 0: treatment, 1: control
+df1 <- data.frame(time, status, trt)
+df1
+```
+
+```{r}
+fit <- coxph(Surv(time, status) ~ trt, data = df1)
+gaze(fit)
+```
+
+```{r}
+residuals(fit, type = "schoenfeld")
+```
+
+```{r}
+resid.scaled <- residuals(fit, type = "schoenfeld") * sum(status) * as.numeric(fit$var)
+resid.scaled
+```
+
+```{r}
+resid.scaled + fit$coefficients
+```
+
+```{r}
+residuals(fit, type = "scaledsch")
+```
+
+```{r}
+cox.zph(fit)$y
+```
