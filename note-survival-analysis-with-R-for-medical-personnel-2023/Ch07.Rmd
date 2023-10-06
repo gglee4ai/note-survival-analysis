@@ -1,0 +1,138 @@
+---
+title: "Chapter 7"
+output: html_notebook
+---
+
+# 1 스탠포드 심장이식 연구
+
+```{r}
+library(survival)
+library(tidyverse)
+library(flextable)
+library(autoReg)
+```
+
+```{r}
+data(heart, package = "survival")
+heart
+```
+
+```{r}
+heart |> count(event)
+heart |> count(surgery)
+heart |> count(transplant)
+```
+
+```{r}
+jasa
+```
+
+```{r}
+fit <- coxph(Surv(futime, fustat) ~ transplant + age + surgery, data = jasa)
+summary(fit)
+```
+
+```{r}
+gaze(fit)
+```
+
+```{r}
+ind30 <- jasa$futime >= 30 # 30일 이상 생존한 환자
+transplant30 <- (jasa$transplant == 1) & (jasa$wait.time < 30)
+fit1 <- coxph(Surv(futime, fustat) ~ transplant30 + age + surgery,
+  data = jasa,
+  subset = ind30
+)
+gaze(fit1)
+```
+
+```{r}
+jasa |>
+  select(wait.time, futime, fustat, transplant) |>
+  slice(c(2, 5, 10, 12, 28, 95))
+```
+
+```{r}
+jasa1 |>
+  filter(id %in% c(2, 5, 10, 10, 12, 28, 28, 95, 95))
+```
+
+```{r}
+tdata <- jasa[, -c(1:4, 11:14)]
+tdata$futime <- pmax(.5, tdata$futime)
+tdata
+```
+
+```{r}
+indx <- (tdata$wait.time == tdata$futime) & (!is.na(tdata$wait.time))
+tdata$wait.time[indx] <- tdata$wait.time[indx] - 0.5
+tdata$id <- 1:nrow(tdata)
+sdata <- tmerge(tdata, tdata,
+  id = id,
+  death = event(futime, fustat),
+  trans = tdc(wait.time)
+)
+final <- sdata[, c(7:11, 2:3)]
+final
+```
+
+```{r}
+fit2 <- coxph(Surv(tstart, tstop, death) ~ trans + surgery + age, data = final)
+summary(fit2)
+```
+
+```{r}
+gaze(fit2)
+```
+
+# 2 예측 가능한 시간의존변수
+
+```{r}
+data(pancreatic2, package = "asaur")
+pancreatic2$stagen <- ifelse(pancreatic2$stage == "M", 1, 0)
+fit <- coxph(Surv(pfs, status) ~ stagen, data = pancreatic2)
+fit
+```
+
+```{r}
+gaze(fit)
+```
+
+```{r}
+cox.zph(fit)
+```
+
+```{r}
+fit2 <- coxph(Surv(pfs, status) ~ stagen + tt(stagen),
+  tt = function(x, t, ...) x * log(t), data = pancreatic2
+)
+fit2
+```
+
+```{r}
+gaze(fit2)
+```
+
+```{r}
+plot(cox.zph(fit, transform = function(pfs) log(pfs)))
+abline(coef(fit2), col = "red")
+```
+
+```{r}
+coxph(Surv(pfs, status) ~ stage + tt(stagen),
+  tt = function(x, t, ...) x * t, data = pancreatic2
+)
+```
+
+```{r}
+coxph(Surv(time, status == 2) ~ age, data = lung)
+```
+
+```{r}
+coxph(Surv(time, status == 2) ~ tt(age),
+  data = lung,
+  tt = function(x, t, ...) {
+    x + t / 365.25
+  }
+)
+```
