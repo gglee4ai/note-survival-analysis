@@ -1,0 +1,186 @@
+---
+title: "Chapter 8"
+output: html_notebook
+---
+
+# 2 지수분포모형
+
+```{r}
+library(survival)
+library(autoReg)
+library(eha)
+```
+
+```{r}
+data(anderson)
+anderson$trt <- ifelse(anderson$rx == 1, 0, 1)
+anderson
+```
+
+## 2-1 지수분포 비례위험모형
+
+```{r}
+fit <- phreg(Surv(time, status) ~ trt, data = anderson, shape = 1)
+fit
+```
+
+```{r}
+exp(-1.527 + c(-1, 1) * 1.96 * 0.398) |> round(2)
+```
+
+## 2-2 지수분포 AFT 모형
+
+```{r}
+fit1 <- survreg(Surv(time, status) ~ trt, data = anderson, dist = "exponential")
+summary(fit1)
+```
+
+```{r}
+adjustedPlot(fit1, addCox = TRUE)
+```
+
+```{r}
+gaze(fit1)
+```
+
+# 3 와이블 모형
+
+```{r}
+library(asaur)
+fit <- survfit(Surv(timeWeeks, delta) ~ 1, data = gastricXelox)
+y <- log(-log(fit$surv))
+x <- log(fit$time)
+m <- lm(y ~ x)
+par(pty = "s")
+plot(x, y)
+abline(m)
+```
+
+```{r}
+loglogplot(fit)
+```
+
+```{r}
+fit1 <- survfit(Surv(time, status) ~ 1, data = anderson)
+loglogplot(fit1)
+```
+
+```{r}
+fit2 <- survfit(Surv(time, status) ~ trt, data = anderson)
+loglogplot(fit2, type = "p")
+```
+
+```{r}
+summary(fit2)
+```
+
+## 3-1 와이블비례위험모형
+
+```{r}
+fit3 <- phreg(Surv(time, status) ~ trt, data = anderson, dist = "weibull")
+fit3
+```
+
+## 3-2 와이블 AFT 모형
+
+```{r}
+fit4 <- survreg(Surv(time, status) ~ trt, data = anderson, dist = "weibull")
+summary(fit4)
+```
+
+```{r}
+gaze(fit4)
+```
+
+```{r}
+adjustedPlot(fit4, addCox = TRUE)
+```
+
+# 4 와이블모형에서 변수의 선택과 모형 진단
+
+## 4-1 와이블모형 적합
+
+```{r}
+fit <- survreg(Surv(time, status) ~ ph.ecog + sex + age, data = lung, dist = "weibull")
+summary(fit)
+```
+
+추정된 회귀계수는 임상적으로 의미가 없기 때문에 이를 HR (harzard ratio)와 ETR (event tiem ratio)로 변환
+
+```{r}
+library(SurvRegCensCov)
+ConvertWeibull(fit)
+```
+
+## 4-2 와이블 가정 평가
+
+```{r}
+loglogplot(survfit(Surv(time, status) ~ sex, data = lung))
+```
+
+## 4-3 그래프를 통한 적합도 검정
+
+```{r}
+fit1 <- phreg(Surv(time, status) ~ ph.ecog + sex + age, data = lung, dist = "weibull")
+fit2 <- coxreg(Surv(time, status) ~ ph.ecog + sex + age, data = lung)
+check.dist(fit2, fit1)
+```
+
+```{r}
+adjustedPlot(fit, pred.values = list(age = c(20, 40, 60, 80), sex = 2, ph.ecog = 3), addCox = TRUE)
+```
+
+## 4-4 예측변수의 선택
+
+```{r}
+library(rms)
+psm.lung <- psm(
+  Surv(time, status) ~ ph.ecog + sex * age + ph.karno + pat.karno + meal.cal + wt.loss,
+  data = lung,
+  dist = "weibull"
+)
+anova(psm.lung)
+```
+
+```{r}
+plot(anova(psm.lung), margin = c("chisq", "d.f.", "P"))
+```
+
+```{r}
+fastbw(psm.lung, rule = "aic")
+```
+
+## 4-5 와이블회귀모형의 시각화
+
+```{r}
+fit <- survreg(Surv(time, status) ~ ph.ecog + age * sex, data = lung, dist = "weibull")
+showEffect(fit)
+```
+
+```{r}
+residualPlot(fit, type = "deviance")
+```
+
+```{r}
+residualPlot(fit, type = "dfbeta")
+```
+
+```{r}
+residualPlot(fit, type = "dfbeta", vars = "age")
+```
+
+# 5 로그로지스틱모형
+
+```{r}
+fit <- survfit(Surv(time, status) ~ WBCCAT, data = anderson2)
+loglogplot(fit, type = "p", what = "survOdds")
+```
+
+```{r}
+fit <- survreg(Surv(time, status) ~ WBCCAT, data = anderson2, dist = "loglogistic")
+summary(fit)
+```
+
+```{r}
+adjustedPlot(fit, addCox = TRUE)
+```
