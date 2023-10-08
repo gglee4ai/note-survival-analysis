@@ -1,0 +1,134 @@
+---
+title: "Chapter 9"
+output: html_notebook
+---
+
+# 1 군집생존자료분석에 사용할 데이터
+
+```{r}
+library(tidyverse)
+library(survival)
+library(autoReg)
+```
+
+```{r}
+data(ashkenazi, package = "asaur")
+ashkenazi
+```
+
+```{r}
+ashkenazi |> count(famID)
+ashkenazi |> count(brcancer)
+ashkenazi |> count(mutant)
+hist(ashkenazi$age)
+```
+
+```{r}
+data(retinopathy, package = "survival")
+retinopathy
+```
+
+```{r}
+retinopathy |> count(laser)
+retinopathy |> count(eye)
+retinopathy |> count(type)
+retinopathy |> count(trt)
+retinopathy |> count(status)
+retinopathy |> count(risk)
+hist(retinopathy$futime)
+```
+
+# 4 ashkenazi 데이터 분석
+
+```{r}
+fit <- coxph(Surv(age, brcancer) ~ mutant, data = ashkenazi)
+summary(fit)
+```
+
+```{r}
+fit$loglik
+```
+
+```{r}
+fit2 <- coxph(Surv(age, brcancer) ~ mutant + cluster(famID), data = ashkenazi) # marginal model
+summary(fit2)
+```
+
+```{r}
+fit3 <- coxph(Surv(age, brcancer) ~ mutant + frailty(famID), data = ashkenazi)
+summary(fit3)
+```
+
+```{r}
+fit4 <- coxph(Surv(age, brcancer) ~ mutant + frailty(famID, distribution = "gaussian"), data = ashkenazi)
+summary(fit4)
+```
+
+```{r}
+library(coxme)
+fit4 <- coxme(Surv(age, brcancer) ~ mutant + (1 | famID), data = ashkenazi)
+summary(fit4)
+```
+
+```{r}
+pchisq(4.246, 1, lower.tail = FALSE)
+```
+
+# 5 retionopathy 데이터 분석
+
+```{r}
+fit0 <- coxph(Surv(futime, status) ~ trt * type, data = retinopathy)
+summary(fit0)
+```
+
+```{r}
+fit1 <- coxph(Surv(futime, status) ~ trt * type + frailty(id), data = retinopathy)
+summary(fit1)
+```
+
+```{r}
+fit2 <- coxph(Surv(futime, status) ~ trt * type + cluster(id), data = retinopathy)
+summary(fit2)
+```
+
+```{r}
+adjustedPlot(fit2, xnames = c("trt", "type"))
+```
+
+```{r}
+result <- coxme(Surv(futime, status) ~ trt * type + (1 | id), data = retinopathy)
+result
+```
+
+```{r}
+fit <- survreg(Surv(futime, status) ~ trt * type + laser + eye + risk + cluster(id), data = retinopathy)
+summary(fit)
+```
+
+```{r}
+final <- step(fit)
+```
+
+```{r}
+summary(final)
+```
+
+```{r}
+adjustedPlot(final, xnames = "trt")
+```
+
+```{r}
+adjustedPlot(final, xnames = "type")
+```
+
+```{r}
+adjustedPlot(final, xnames = c("trt", "type"))
+```
+
+```{r}
+adjustedPlot(final, xnames = c("trt", "type"), addCox = TRUE)
+```
+
+```{r}
+showEffect(final)
+```
