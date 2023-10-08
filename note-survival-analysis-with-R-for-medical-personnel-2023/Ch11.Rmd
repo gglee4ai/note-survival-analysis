@@ -1,0 +1,148 @@
+---
+title: "Chapter 11"
+output: html_notebook
+---
+
+```{r}
+library(survival)
+library(howto)
+library(autoReg)
+library(flextable)
+```
+
+# 3 각각의 경쟁위험을 분리된 모형에 적합시키는 방법
+
+```{r}
+fit1 <- coxph(Surv(dtime, status2 == 1) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar)
+gaze(fit1)
+```
+
+```{r}
+z <- -0.423 / 0.202
+pnorm(-abs(z)) * 2
+```
+
+```{r}
+fit2 <- coxph(Surv(dtime, status2 == 2) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar)
+fit2 |> gaze()
+```
+
+```{r}
+fit3 <- coxph(Surv(dtime, status2 == 3) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar)
+gaze(fit3)
+```
+
+# 4 독립성 가정
+
+```{r}
+Byar2 <- Byar
+Byar2$status2[Byar2$status2 > 1] <- 1
+fit4 <- coxph(Surv(dtime, status2 == 1) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar2)
+gaze(fit4)
+```
+
+```{r}
+Byar3 <- Byar
+Byar3$dtime[Byar$status2 > 1] <- max(Byar$dtime)
+Byar3$status2[Byar3$status2 > 1] <- 0
+fit5 <- coxph(Surv(dtime, status2 == 1) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar3)
+gaze(fit5)
+```
+
+# 5 누적발생률함수
+
+```{r}
+time <- c(0.7, 3, 4.9, 6, 6, 6.9, 10, 10.8, 17.1, 20.3, 1.5, 2.8, 3.8, 4.7, 7, 10, 10, 11.2, 3.2, 7.6, 10, 11, 15, 24.4)
+status <- c(rep(1, 10), rep(2, 8), rep(0, 6))
+df <- data.frame(time, status)
+df
+```
+
+```{r}
+library(howto)
+library(flextable)
+library(ftExtra)
+result <- data2CIC(df, cause = 1, add.CPC = FALSE)
+names(result) <- c("$t_f$", "$n_f$", "$m_f$", "$h(t_f)$", "$S(t_{f-1})$", "$I(t_f)$", "$CIF(t_f)$")
+result |>
+  as_flextable() %>%
+  colformat_md(part = "header")
+```
+
+```{r}
+library(survival)
+library(ggplot2)
+fit <- survfit(Surv(time, status == 1) ~ 1, data = df)
+df1 <- data.frame(x <- fit$time, y = 1 - fit$surv)
+ggplot() +
+  geom_step(data = result, aes(x = `$t_f$`, y = `$CIF(t_f)$`)) +
+  geom_step(data = df1, aes(x, y), lty = 2, color = "red") +
+  labs(x = "months", y = "proportion dying") +
+  annotate("text", x = 14, y = 0.33, label = "CIF") +
+  annotate("text", x = 14, y = 0.5, label = "1-KM", color = "red") +
+  theme_classic()
+```
+
+```{r}
+library(autoReg)
+model <- crrFormula(dtime + statusCancer ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar)
+model
+```
+
+```{r}
+modelCox <- coxph(Surv(dtime, statusCancer) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar)
+autoReg(modelCox) |>
+  addFitSummary(model, statsname = "HR(CIF)") |>
+  myft()
+```
+
+```{r}
+ggcmprsk(dtime + status2 ~ Rx,
+  data = Byar,
+  id = c("alive", "cancer death", "CVD death", "Other death"),
+  strata = c("placebo or 0.2mg DES", "1.0mg or 5.0mg DES")
+)
+```
+
+# 누적조건부확률함수
+
+```{r}
+result <- data2CIC(df, cause = 1)
+names(result) <- c(
+  "$t_f$",
+  "$n_f$",
+  "$S(t_{f-1})$",
+  "$CIF_{ca}(t_f)$",
+  "$CIF_{other}(t_f)$",
+  "$CPF_c$"
+)
+flextable(result) |>
+  colformat_md(part = "all")
+```
+
+```{r}
+df1 <- data2CIC(Byar[Byar$Rx == 0, ], time = "dtime", status = "status2")
+df2 <- data2CIC(Byar[Byar$Rx == 1, ], time = "dtime", status = "status2")
+ggplot(df1, aes(t, CPC)) +
+  geom_step() +
+  geom_step(data = df2, col = "red", lty = 2) +
+  theme_classic() +
+  annotate("text", x = 20, y = 0.4, label = "placebo or 0.1mg DES") +
+  annotate("text", x = 60, y = 0.25, label = "1.0mg or 5.0mg DES", color = "red") +
+  labs(
+    x = "Months",
+    y = "Proportion dying from prostate cancer",
+    title = "Cumulative Conditional Probability"
+  )
+```
+
+```{r}
+library(Cprob)
+tis <- seq(median(Byar$dtime), max(Byar$dtime), length = 50)
+fitcpf <- cpfpo(Hist(dtime, status2) ~ Rx + Age + Wt + PF + Hx + Hb + SZ + SG, data = Byar, tis = tis)
+fitcpf
+```
+
+```{r, fig.asp=1}
+lattice::xyplot(fitcpf, scales = list(relation = "free"), layout = c(3, 3))
+```
