@@ -1,0 +1,121 @@
+---
+title: "Appendix 2"
+output: html_notebook
+---
+
+2
+
+```{r}
+data(cancer, package = "survival")
+```
+
+```{r}
+library(survival)
+library(autoReg)
+```
+
+```{r}
+gaze(colon)
+```
+
+```{r}
+fit1 <- coxph(Surv(time, status) ~ rx, data = colon)
+gaze(fit1)
+```
+
+```{r}
+coxph(Surv(time, status) ~ sex, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ age, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ obstruct, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ perfor, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ adhere, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ nodes, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ differ, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ extent, data = colon) |> gaze()
+```
+
+```{r}
+coxph(Surv(time, status) ~ surg, data = colon) |> gaze()
+```
+
+```{r}
+fit <- coxph(Surv(time, status) ~ rx + obstruct + perfor + adhere + nodes + differ + extent + surg,
+  data = colon
+)
+gaze(fit)
+```
+
+```{r}
+try(final <- step(fit, trace = 1))
+```
+
+```{r}
+sapply(colon, \(x) sum(is.na(x)))
+```
+
+```{r}
+colon1 <- na.omit(colon)
+nrow(colon)
+nrow(colon1)
+```
+
+```{r}
+fit <- coxph(Surv(time, status) ~ rx + obstruct + perfor + adhere + nodes + differ + extent + surg,
+  data = colon1
+)
+gaze(fit)
+```
+
+```{r}
+final <- step(fit)
+```
+
+```{r}
+gaze(final)
+```
+
+```{r}
+fit <- coxph(Surv(time, status) ~ rx + sex + age + obstruct + perfor + adhere + nodes + differ + extent + surg,
+  data = colon
+)
+result <- autoReg(fit, uni = TRUE, final = TRUE)
+result
+```
+
+```{r}
+result |> myft()
+```
+
+```{r}
+# rrtable::table2pptx(result)
+```
+
+```{r, fig.asp = 1.5}
+modelPlot(fit, uni = TRUE)
+```
+
+```{r}
+x <- modelPlot(fit, multi = FALSE, final = TRUE)
+x
+```
