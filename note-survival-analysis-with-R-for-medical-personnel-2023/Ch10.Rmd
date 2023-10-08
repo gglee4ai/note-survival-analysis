@@ -1,0 +1,130 @@
+---
+title: "Chapter 10"
+output: html_notebook
+---
+
+# 2 계수과정접근의 일반적인 데이터 형태
+
+```{r}
+library(tidyverse)
+library(survival)
+library(autoReg)
+bladder2
+```
+
+```{r}
+autonum <- officer::run_autonum(seq_id = "tab", bkm = "Table10-6", bkm_all = TRUE)
+data <- bladder2[bladder2$id <= 20, ]
+data |>
+  flextable::flextable() |>
+  flextable::set_caption(caption = "방광암 환자의 재발자료 중 1-20번째 환자의 자료")
+```
+
+```{r}
+t <- table(data$id)
+t
+```
+
+# 3 계수과정모형과 방법
+
+```{r}
+data |>
+  mutate(ftime = stop - start) |>
+  arrange(ftime)
+```
+
+# 5 로버스트 추정
+
+```{r}
+fit <- coxph(Surv(start, stop, event) ~ rx + number + size, data = bladder2)
+summary(fit)
+```
+
+```{r}
+fit1 <- coxph(Surv(start, stop, event) ~ rx + number + size + cluster(id), data = bladder2)
+summary(fit1)
+```
+
+```{r}
+-0.46469 / 0.26556
+```
+
+```{r}
+pnorm(-abs(-1.749849)) * 2
+```
+
+```{r}
+exp(-0.46469 + c(-1, 1) * 1.96 * 0.26556)
+```
+
+```{r}
+autoReg::gaze(fit1) |> myft()
+```
+
+```{r}
+adjustedPlot(fit1, xnames = "rx")
+```
+
+# 6 층화된 콕스모형 접근
+
+```{r}
+bladder3 <- bladder2
+bladder3$stop <- bladder3$stop - bladder3$start
+bladder3$start <- 0
+bladder3[bladder3$id == 9, ]
+```
+
+```{r}
+bladder[bladder$id == 9, ]
+```
+
+```{r}
+bladder2 |> count(id)
+```
+
+```{r}
+result <- howto::AG2WLW(bladder2, status = "event", interval = "enum")
+identical(result, bladder)
+```
+
+```{r}
+result <- howto::WLW2AG(bladder, status = "event", interval = "enum")
+identical(result, bladder2)
+```
+
+# 7 R을 이용한 층화된 콕스 분석
+
+```{r}
+fit2 <- coxph(Surv(start, stop, event) ~ rx + number + size + cluster(id) + strata(enum),
+  data = bladder2
+)
+fit2
+```
+
+```{r}
+adjustedPlot(fit2, xnames = "enum")
+```
+
+```{r}
+fit3 <- coxph(Surv(start, stop, event) ~ rx + number + size + cluster(id) + strata(enum),
+  data = bladder3
+)
+fit3
+```
+
+```{r}
+fit4 <- coxph(Surv(stop, event) ~ rx + number + size + cluster(id) + strata(enum),
+  data = bladder
+)
+fit4
+```
+
+```{r}
+result <- autoReg(fit1)
+# names(result)[4] = "HR(Counting Process)"
+result |>
+  addFitSummary(fit2) |>
+  addFitSummary(fit3) |>
+  addFitSummary(fit4) |>
+  myft()
+```
